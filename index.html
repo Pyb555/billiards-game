@@ -1,0 +1,2514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>台球练习 - iOS风格台球游戏</title>
+  <!-- Tailwind CSS v3 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- Matter.js 物理引擎 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  
+  <!-- Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#007AFF',
+            secondary: '#5856D6',
+            success: '#34C759',
+            warning: '#FF9500',
+            danger: '#FF3B30',
+            dark: '#1C1C1E',
+            light: '#F2F2F7',
+            'ios-gray': '#8E8E93',
+            'ios-light-gray': '#C7C7CC',
+            'ios-background': '#F2F2F7',
+            'pool-green': '#0F3E0F',
+            'pool-green-light': '#1E5C1E',
+            'pool-wood': '#8B4513',
+            'pool-wood-light': '#A0522D'
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          },
+          boxShadow: {
+            'ios': '0 2px 10px rgba(0, 0, 0, 0.1)',
+            'ios-elevated': '0 4px 20px rgba(0, 0, 0, 0.15)',
+          },
+          borderRadius: {
+            'ios': '12px',
+            'ios-large': '20px',
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .text-shadow {
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      }
+      .text-shadow-lg {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+      .glass-effect {
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .ios-button {
+        @apply relative overflow-hidden rounded-ios bg-primary text-white font-medium py-3 px-6 transition-all duration-300;
+      }
+      .ios-button:active {
+        @apply opacity-80 transform scale-98;
+      }
+      .ios-button-secondary {
+        @apply relative overflow-hidden rounded-ios bg-light text-dark font-medium py-3 px-6 border border-ios-light-gray transition-all duration-300;
+      }
+      .ios-button-secondary:active {
+        @apply bg-ios-light-gray transform scale-98;
+      }
+      .ios-card {
+        @apply bg-white rounded-ios-large shadow-ios p-5;
+      }
+      .pool-ball {
+        @apply absolute rounded-full shadow-lg transform transition-all duration-300;
+      }
+      .pool-ball-number {
+        @apply absolute inset-0 flex items-center justify-center text-white font-bold text-shadow-lg;
+      }
+    }
+  </style>
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica Neue, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      background-color: #F2F2F7;
+    }
+    
+    /* iOS 风格滚动条 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background-color: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+    }
+    
+    /* 防止双击缩放 */
+    * {
+      touch-action: manipulation;
+    }
+    
+    /* 台球桌样式 */
+    .pool-table {
+      position: relative;
+      background-color: #0F3E0F;
+      border-radius: 8px;
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+    
+    .pool-table::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(30, 92, 30, 0.3) 0%, rgba(15, 62, 15, 0.3) 100%);
+      pointer-events: none;
+    }
+    
+    .pool-pocket {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background-color: #000;
+      border-radius: 50%;
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+      z-index: 10;
+    }
+    
+    .pool-cue {
+      position: absolute;
+      height: 4px;
+      background: linear-gradient(90deg, #A0522D, #D2B48C);
+      transform-origin: left center;
+      z-index: 5;
+      pointer-events: none;
+    }
+    
+    .pool-cue-tip {
+      position: absolute;
+      right: -6px;
+      top: -3px;
+      width: 6px;
+      height: 10px;
+      background-color: #F0F0F0;
+      border-radius: 2px;
+    }
+    
+    /* 动画效果 */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    @keyframes slideDown {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    @keyframes scaleIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    
+    .animate-slide-up {
+      animation: slideUp 0.4s ease-out forwards;
+    }
+    
+    .animate-slide-down {
+      animation: slideDown 0.4s ease-out forwards;
+    }
+    
+    .animate-scale-in {
+      animation: scaleIn 0.3s ease-out forwards;
+    }
+    
+    /* 游戏模式选择卡片 */
+    .mode-card {
+      transition: all 0.3s ease;
+    }
+    
+    .mode-card:hover {
+      transform: translateY(-5px);
+    }
+    
+    .mode-card:active {
+      transform: translateY(0);
+    }
+    
+    /* 力度条样式 */
+    .power-bar-container {
+      position: relative;
+      height: 6px;
+      background-color: rgba(255, 255, 255, 0.3);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    
+    .power-bar {
+      position: absolute;
+      height: 100%;
+      background-color: #FF3B30;
+      border-radius: 3px;
+      transition: width 0.1s linear;
+    }
+    
+    /* 游戏控制按钮 */
+    .game-control-btn {
+      transition: all 0.2s ease;
+    }
+    
+    .game-control-btn:active {
+      transform: scale(0.95);
+      opacity: 0.8;
+    }
+    
+    /* 遮罩层 */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    /* 模态框 */
+    .modal {
+      background-color: white;
+      border-radius: 20px;
+      padding: 20px;
+      width: 90%;
+      max-width: 400px;
+      max-height: 80vh;
+      overflow-y: auto;
+      transform: scale(0.9);
+      transition: transform 0.3s ease;
+    }
+    
+    .overlay.active .modal {
+      transform: scale(1);
+    }
+    
+    /* 好友列表项 */
+    .friend-item {
+      transition: background-color 0.2s ease;
+    }
+    
+    .friend-item:active {
+      background-color: #F2F2F7;
+    }
+    
+    /* 球路预测线 */
+    .prediction-line {
+      position: absolute;
+      height: 2px;
+      background-color: rgba(255, 255, 255, 0.5);
+      transform-origin: left center;
+      pointer-events: none;
+      z-index: 4;
+    }
+  </style>
+</head>
+<body class="bg-ios-background text-dark">
+  <!-- 加载屏幕 -->
+  <div id="loading-screen" class="fixed inset-0 bg-ios-background z-50 flex flex-col items-center justify-center">
+    <img src="https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/2a42c681c21c408db031de68b656021e~tplv-a9rns2rl98-image.image?rcl=20251128105014EE056FF0F43AD2CDDB73&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766890273&x-signature=uIdxaawpfHOy2LXjnNaTdj0TU08%3D" alt="台球游戏" class="w-32 h-32 mb-6 animate-pulse-slow">
+    <h1 class="text-3xl font-bold text-primary mb-2">台球练习</h1>
+    <p class="text-ios-gray mb-6">iOS风格台球游戏</p>
+    <div class="w-64 h-2 bg-ios-light-gray rounded-full overflow-hidden">
+      <div id="loading-bar" class="h-full bg-primary rounded-full" style="width: 0%"></div>
+    </div>
+  </div>
+
+  <!-- 主菜单屏幕 -->
+  <div id="main-menu" class="min-h-screen flex flex-col items-center justify-center px-6 hidden">
+    <div class="text-center mb-12 animate-slide-down">
+      <img src="https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/2a42c681c21c408db031de68b656021e~tplv-a9rns2rl98-image.image?rcl=20251128105014EE056FF0F43AD2CDDB73&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766890273&x-signature=uIdxaawpfHOy2LXjnNaTdj0TU08%3D" alt="台球游戏" class="w-24 h-24 mx-auto mb-4">
+      <h1 class="text-4xl font-bold text-primary mb-2">台球练习</h1>
+      <p class="text-ios-gray">享受真实的台球体验</p>
+    </div>
+    
+    <div class="w-full max-w-md space-y-4 animate-slide-up">
+      <button id="play-btn" class="ios-button w-full flex items-center justify-center">
+        <i class="fa fa-play-circle mr-2"></i> 开始游戏
+      </button>
+      <button id="multiplayer-btn" class="ios-button-secondary w-full flex items-center justify-center">
+        <i class="fa fa-users mr-2"></i> 好友对战
+      </button>
+      <button id="settings-btn" class="ios-button-secondary w-full flex items-center justify-center">
+        <i class="fa fa-cog mr-2"></i> 设置
+      </button>
+      <button id="about-btn" class="ios-button-secondary w-full flex items-center justify-center">
+        <i class="fa fa-info-circle mr-2"></i> 关于
+      </button>
+    </div>
+  </div>
+
+  <!-- 游戏模式选择屏幕 -->
+  <div id="game-mode-select" class="min-h-screen flex flex-col items-center justify-start pt-16 px-6 hidden">
+    <div class="absolute top-0 left-0 right-0 bg-white shadow-sm z-10 flex items-center px-4 h-16">
+      <button id="back-to-menu-btn" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100">
+        <i class="fa fa-arrow-left text-primary"></i>
+      </button>
+      <h2 class="text-xl font-bold mx-auto">选择游戏模式</h2>
+      <div class="w-10"></div> <!-- 占位，保持标题居中 -->
+    </div>
+    
+    <div class="w-full max-w-md mt-8 space-y-6 animate-fade-in">
+      <div class="mode-card ios-card" data-mode="eight-ball">
+        <div class="flex items-center">
+          <div class="w-16 h-16 rounded-full bg-pool-green flex items-center justify-center mr-4">
+            <span class="text-white font-bold text-xl">8</span>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold mb-1">中式八球</h3>
+            <p class="text-ios-gray text-sm">最受欢迎的台球玩法</p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <p class="text-sm text-gray-600">
+            中式八球是一种融合了美式八球和英式斯诺克特点的台球运动，使用15颗目标球和1颗母球。
+          </p>
+        </div>
+      </div>
+      
+      <div class="mode-card ios-card" data-mode="snooker">
+        <div class="flex items-center">
+          <div class="w-16 h-16 rounded-full bg-pool-green flex items-center justify-center mr-4">
+            <span class="text-white font-bold text-xl">S</span>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold mb-1">斯诺克</h3>
+            <p class="text-ios-gray text-sm">考验精准度的经典玩法</p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <p class="text-sm text-gray-600">
+            斯诺克是一种需要高度技巧和策略的台球运动，使用22颗球，包括15颗红球、6颗彩球和1颗白球。
+          </p>
+        </div>
+      </div>
+      
+      <div class="mode-card ios-card" data-mode="nine-ball">
+        <div class="flex items-center">
+          <div class="w-16 h-16 rounded-full bg-pool-green flex items-center justify-center mr-4">
+            <span class="text-white font-bold text-xl">9</span>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold mb-1">中式九球</h3>
+            <p class="text-ios-gray text-sm">快速刺激的台球玩法</p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <p class="text-sm text-gray-600">
+            中式九球是一种快节奏的台球运动，使用9颗编号球和1颗母球，选手必须按照球的编号顺序击打。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 难度选择屏幕 -->
+  <div id="difficulty-select" class="min-h-screen flex flex-col items-center justify-start pt-16 px-6 hidden">
+    <div class="absolute top-0 left-0 right-0 bg-white shadow-sm z-10 flex items-center px-4 h-16">
+      <button id="back-to-mode-btn" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100">
+        <i class="fa fa-arrow-left text-primary"></i>
+      </button>
+      <h2 class="text-xl font-bold mx-auto">选择难度</h2>
+      <div class="w-10"></div> <!-- 占位，保持标题居中 -->
+    </div>
+    
+    <div class="w-full max-w-md mt-12 space-y-6 animate-fade-in">
+      <button class="difficulty-btn ios-button w-full flex items-center justify-center" data-difficulty="easy">
+        <i class="fa fa-smile-o mr-2"></i> 简单
+      </button>
+      <button class="difficulty-btn ios-button-secondary w-full flex items-center justify-center" data-difficulty="medium">
+        <i class="fa fa-meh-o mr-2"></i> 中等
+      </button>
+      <button class="difficulty-btn ios-button-secondary w-full flex items-center justify-center" data-difficulty="hard">
+        <i class="fa fa-frown-o mr-2"></i> 困难
+      </button>
+    </div>
+  </div>
+
+  <!-- 游戏屏幕 -->
+  <div id="game-screen" class="min-h-screen flex flex-col items-center justify-start bg-dark hidden">
+    <!-- 游戏顶部栏 -->
+    <div class="w-full bg-dark bg-opacity-80 backdrop-blur-md z-10 flex items-center px-4 h-16">
+      <button id="pause-btn" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800">
+        <i class="fa fa-pause text-white"></i>
+      </button>
+      <div class="flex-1 mx-4">
+        <div class="flex justify-between items-center">
+          <div class="text-white font-medium">玩家</div>
+          <div id="player-score" class="text-white font-bold text-xl">0</div>
+        </div>
+        <div class="flex justify-between items-center mt-1">
+          <div class="text-ios-gray text-sm">电脑</div>
+          <div id="computer-score" class="text-white font-bold text-xl">0</div>
+        </div>
+      </div>
+      <div class="flex items-center">
+        <div id="current-turn" class="px-3 py-1 bg-primary rounded-full text-white text-sm font-medium">
+          你的回合
+        </div>
+      </div>
+    </div>
+    
+    <!-- 台球桌区域 -->
+    <div class="flex-1 w-full relative overflow-hidden">
+      <div id="pool-table-container" class="absolute inset-0 flex items-center justify-center">
+        <!-- 台球桌将通过JavaScript动态创建 -->
+        <div id="pool-table" class="pool-table w-full max-w-4xl aspect-[2/1] relative">
+          <!-- 球袋位置 -->
+          <div class="pool-pocket" style="top: -15px; left: -15px;"></div>
+          <div class="pool-pocket" style="top: -15px; right: -15px;"></div>
+          <div class="pool-pocket" style="bottom: -15px; left: -15px;"></div>
+          <div class="pool-pocket" style="bottom: -15px; right: -15px;"></div>
+          <div class="pool-pocket" style="top: -15px; left: 50%; transform: translateX(-50%);"></div>
+          <div class="pool-pocket" style="bottom: -15px; left: 50%; transform: translateX(-50%);"></div>
+          
+          <!-- 台球将通过JavaScript动态创建 -->
+          
+          <!-- 球杆 -->
+          <div id="pool-cue" class="pool-cue hidden">
+            <div class="pool-cue-tip"></div>
+          </div>
+          
+          <!-- 球路预测线 -->
+          <div id="prediction-line" class="prediction-line hidden"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 游戏控制栏 -->
+    <div class="w-full bg-dark bg-opacity-80 backdrop-blur-md z-10 flex items-center justify-between px-4 h-16">
+      <button id="settings-in-game-btn" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800">
+        <i class="fa fa-cog text-white"></i>
+      </button>
+      
+      <div class="flex-1 mx-4">
+        <div class="text-white text-sm mb-1">击球力度</div>
+        <div class="power-bar-container">
+          <div id="power-bar" class="power-bar" style="width: 0%"></div>
+        </div>
+      </div>
+      
+      <button id="help-btn" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800">
+        <i class="fa fa-question text-white"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- 好友对战屏幕 -->
+  <div id="multiplayer-screen" class="min-h-screen flex flex-col items-center justify-start pt-16 px-6 hidden">
+    <div class="absolute top-0 left-0 right-0 bg-white shadow-sm z-10 flex items-center px-4 h-16">
+      <button id="back-to-menu-from-multiplayer-btn" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100">
+        <i class="fa fa-arrow-left text-primary"></i>
+      </button>
+      <h2 class="text-xl font-bold mx-auto">好友对战</h2>
+      <div class="w-10"></div> <!-- 占位，保持标题居中 -->
+    </div>
+    
+    <div class="w-full max-w-md mt-8 animate-fade-in">
+      <div class="ios-card mb-6">
+        <h3 class="text-lg font-bold mb-3">选择游戏模式</h3>
+        <div class="flex space-x-3">
+          <button class="friend-mode-btn flex-1 py-2 px-3 rounded-ios bg-pool-green text-white text-center text-sm font-medium" data-mode="eight-ball">中式八球</button>
+          <button class="friend-mode-btn flex-1 py-2 px-3 rounded-ios bg-gray-200 text-gray-700 text-center text-sm font-medium" data-mode="snooker">斯诺克</button>
+          <button class="friend-mode-btn flex-1 py-2 px-3 rounded-ios bg-gray-200 text-gray-700 text-center text-sm font-medium" data-mode="nine-ball">中式九球</button>
+        </div>
+      </div>
+      
+      <div class="ios-card">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold">微信好友</h3>
+          <button class="text-primary text-sm">刷新</button>
+        </div>
+        
+        <div class="space-y-3 max-h-[50vh] overflow-y-auto">
+          <div class="friend-item flex items-center p-3 rounded-ios hover:bg-gray-100">
+            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+              <span class="text-blue-500 font-medium">张</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center">
+                <div class="font-medium">张三</div>
+                <div class="ml-2 w-2 h-2 rounded-full bg-green-500"></div>
+              </div>
+              <div class="text-xs text-ios-gray">在线</div>
+            </div>
+            <button class="invite-btn px-3 py-1 bg-primary text-white text-sm rounded-full">邀请</button>
+          </div>
+          
+          <div class="friend-item flex items-center p-3 rounded-ios hover:bg-gray-100">
+            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3">
+              <span class="text-green-500 font-medium">李</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center">
+                <div class="font-medium">李四</div>
+                <div class="ml-2 w-2 h-2 rounded-full bg-green-500"></div>
+              </div>
+              <div class="text-xs text-ios-gray">在线</div>
+            </div>
+            <button class="invite-btn px-3 py-1 bg-primary text-white text-sm rounded-full">邀请</button>
+          </div>
+          
+          <div class="friend-item flex items-center p-3 rounded-ios hover:bg-gray-100">
+            <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center mr-3">
+              <span class="text-purple-500 font-medium">王</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center">
+                <div class="font-medium">王五</div>
+                <div class="ml-2 w-2 h-2 rounded-full bg-gray-300"></div>
+              </div>
+              <div class="text-xs text-ios-gray">离线</div>
+            </div>
+            <button class="invite-btn px-3 py-1 bg-gray-300 text-gray-600 text-sm rounded-full" disabled>邀请</button>
+          </div>
+          
+          <div class="friend-item flex items-center p-3 rounded-ios hover:bg-gray-100">
+            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3">
+              <span class="text-red-500 font-medium">赵</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center">
+                <div class="font-medium">赵六</div>
+                <div class="ml-2 w-2 h-2 rounded-full bg-green-500"></div>
+              </div>
+              <div class="text-xs text-ios-gray">在线</div>
+            </div>
+            <button class="invite-btn px-3 py-1 bg-primary text-white text-sm rounded-full">邀请</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置屏幕 -->
+  <div id="settings-screen" class="min-h-screen flex flex-col items-center justify-start pt-16 px-6 hidden">
+    <div class="absolute top-0 left-0 right-0 bg-white shadow-sm z-10 flex items-center px-4 h-16">
+      <button id="back-to-menu-from-settings-btn" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100">
+        <i class="fa fa-arrow-left text-primary"></i>
+      </button>
+      <h2 class="text-xl font-bold mx-auto">设置</h2>
+      <div class="w-10"></div> <!-- 占位，保持标题居中 -->
+    </div>
+    
+    <div class="w-full max-w-md mt-8 space-y-6 animate-fade-in">
+      <div class="ios-card">
+        <h3 class="text-lg font-bold mb-4">游戏设置</h3>
+        
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium">音效</div>
+              <div class="text-sm text-ios-gray">游戏音效和背景音乐</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" class="sr-only peer" id="sound-toggle" checked>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium">球路预测</div>
+              <div class="text-sm text-ios-gray">显示击球后的球路预测</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" class="sr-only peer" id="prediction-toggle" checked>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium">振动反馈</div>
+              <div class="text-sm text-ios-gray">击球时的振动反馈</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" class="sr-only peer" id="vibration-toggle" checked>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="ios-card">
+        <h3 class="text-lg font-bold mb-4">画面设置</h3>
+        
+        <div class="space-y-4">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="font-medium">画面质量</div>
+              <div class="text-sm text-primary" id="quality-value">高</div>
+            </div>
+            <input type="range" min="1" max="3" value="3" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" id="quality-slider">
+            <div class="flex justify-between text-xs text-ios-gray mt-1">
+              <span>低</span>
+              <span>中</span>
+              <span>高</span>
+            </div>
+          </div>
+          
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="font-medium">球桌材质</div>
+            </div>
+            <div class="flex space-x-3">
+              <button class="table-material-btn flex-1 py-2 px-3 rounded-ios bg-pool-green text-white text-center text-sm font-medium" data-material="standard">标准</button>
+              <button class="table-material-btn flex-1 py-2 px-3 rounded-ios bg-gray-200 text-gray-700 text-center text-sm font-medium" data-material="fast">快速</button>
+              <button class="table-material-btn flex-1 py-2 px-3 rounded-ios bg-gray-200 text-gray-700 text-center text-sm font-medium" data-material="slow">慢速</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <button id="reset-settings-btn" class="ios-button-secondary w-full flex items-center justify-center">
+        <i class="fa fa-refresh mr-2"></i> 恢复默认设置
+      </button>
+    </div>
+  </div>
+
+  <!-- 关于屏幕 -->
+  <div id="about-screen" class="min-h-screen flex flex-col items-center justify-start pt-16 px-6 hidden">
+    <div class="absolute top-0 left-0 right-0 bg-white shadow-sm z-10 flex items-center px-4 h-16">
+      <button id="back-to-menu-from-about-btn" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100">
+        <i class="fa fa-arrow-left text-primary"></i>
+      </button>
+      <h2 class="text-xl font-bold mx-auto">关于</h2>
+      <div class="w-10"></div> <!-- 占位，保持标题居中 -->
+    </div>
+    
+    <div class="w-full max-w-md mt-8 space-y-6 animate-fade-in">
+      <div class="ios-card text-center">
+        <img src="https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/2a42c681c21c408db031de68b656021e~tplv-a9rns2rl98-image.image?rcl=20251128105014EE056FF0F43AD2CDDB73&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766890273&x-signature=uIdxaawpfHOy2LXjnNaTdj0TU08%3D" alt="台球游戏" class="w-24 h-24 mx-auto mb-4">
+        <h3 class="text-xl font-bold mb-1">台球练习</h3>
+        <p class="text-ios-gray mb-4">版本 1.0.0</p>
+        <p class="text-sm text-gray-600">
+          台球练习是一款iOS风格的台球游戏，提供中式八球、斯诺克和中式九球三种游戏模式，支持人机对战和好友对战。
+        </p>
+      </div>
+      
+      <div class="ios-card">
+        <h3 class="text-lg font-bold mb-3">游戏特色</h3>
+        <ul class="space-y-2 text-sm text-gray-600">
+          <li class="flex items-start">
+            <i class="fa fa-check-circle text-success mt-0.5 mr-2"></i>
+            <span>真实的物理引擎，模拟真实台球体验</span>
+          </li>
+          <li class="flex items-start">
+            <i class="fa fa-check-circle text-success mt-0.5 mr-2"></i>
+            <span>三种经典台球玩法：中式八球、斯诺克、中式九球</span>
+          </li>
+          <li class="flex items-start">
+            <i class="fa fa-check-circle text-success mt-0.5 mr-2"></i>
+            <span>多种难度等级，适合不同水平的玩家</span>
+          </li>
+          <li class="flex items-start">
+            <i class="fa fa-check-circle text-success mt-0.5 mr-2"></i>
+            <span>支持与微信好友在线对战</span>
+          </li>
+          <li class="flex items-start">
+            <i class="fa fa-check-circle text-success mt-0.5 mr-2"></i>
+            <span>精美的iOS风格界面设计</span>
+          </li>
+        </ul>
+      </div>
+      
+      <div class="ios-card">
+        <h3 class="text-lg font-bold mb-3">联系我们</h3>
+        <p class="text-sm text-gray-600 mb-4">
+          如有任何问题或建议，请通过以下方式联系我们：
+        </p>
+        <div class="space-y-2">
+          <a href="mailto:support@billiardgame.com" class="flex items-center text-primary">
+            <i class="fa fa-envelope-o mr-2"></i>
+            <span>support@billiardgame.com</span>
+          </a>
+          <a href="#" class="flex items-center text-primary">
+            <i class="fa fa-weixin mr-2"></i>
+            <span>微信公众号：台球练习</span>
+          </a>
+        </div>
+      </div>
+      
+      <div class="ios-card">
+        <h3 class="text-lg font-bold mb-3">版权信息</h3>
+        <p class="text-sm text-gray-600">
+          © 2025 台球练习. 保留所有权利.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 暂停菜单 -->
+  <div id="pause-menu" class="overlay">
+    <div class="modal">
+      <h3 class="text-xl font-bold mb-6 text-center">游戏暂停</h3>
+      <div class="space-y-4">
+        <button id="resume-btn" class="ios-button w-full flex items-center justify-center">
+          <i class="fa fa-play mr-2"></i> 继续游戏
+        </button>
+        <button id="restart-btn" class="ios-button-secondary w-full flex items-center justify-center">
+          <i class="fa fa-refresh mr-2"></i> 重新开始
+        </button>
+        <button id="settings-in-pause-btn" class="ios-button-secondary w-full flex items-center justify-center">
+          <i class="fa fa-cog mr-2"></i> 设置
+        </button>
+        <button id="quit-btn" class="ios-button-secondary w-full flex items-center justify-center">
+          <i class="fa fa-sign-out mr-2"></i> 退出游戏
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 游戏结束菜单 -->
+  <div id="game-over-menu" class="overlay">
+    <div class="modal">
+      <h3 id="game-over-title" class="text-xl font-bold mb-2 text-center">游戏结束</h3>
+      <p id="game-over-message" class="text-ios-gray mb-6 text-center">你赢了！</p>
+      
+      <div class="flex justify-center items-center mb-6">
+        <div class="text-center mr-8">
+          <div class="text-sm text-ios-gray">你的得分</div>
+          <div id="final-player-score" class="text-3xl font-bold text-primary">8</div>
+        </div>
+        <div class="text-center">
+          <div class="text-sm text-ios-gray">电脑得分</div>
+          <div id="final-computer-score" class="text-3xl font-bold text-secondary">5</div>
+        </div>
+      </div>
+      
+      <div class="space-y-4">
+        <button id="play-again-btn" class="ios-button w-full flex items-center justify-center">
+          <i class="fa fa-refresh mr-2"></i> 再玩一次
+        </button>
+        <button id="change-mode-btn" class="ios-button-secondary w-full flex items-center justify-center">
+          <i class="fa fa-list mr-2"></i> 更换模式
+        </button>
+        <button id="back-to-main-menu-btn" class="ios-button-secondary w-full flex items-center justify-center">
+          <i class="fa fa-home mr-2"></i> 返回主菜单
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 邀请发送成功提示 -->
+  <div id="invite-success-toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-dark text-white px-4 py-2 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 z-50">
+    邀请已发送，请等待好友接受...
+  </div>
+
+  <!-- JavaScript -->
+  <script>
+    // 游戏状态
+    const gameState = {
+      currentScreen: 'loading',
+      selectedMode: 'eight-ball',
+      selectedDifficulty: 'medium',
+      isGameActive: false,
+      isPaused: false,
+      playerScore: 0,
+      computerScore: 0,
+      currentTurn: 'player', // 'player' or 'computer'
+      gameMode: {
+        'eight-ball': {
+          name: '中式八球',
+          ballCount: 16, // 15个目标球 + 1个母球
+          rules: '中式八球规则'
+        },
+        'snooker': {
+          name: '斯诺克',
+          ballCount: 22, // 15个红球 + 6个彩球 + 1个母球
+          rules: '斯诺克规则'
+        },
+        'nine-ball': {
+          name: '中式九球',
+          ballCount: 10, // 9个目标球 + 1个母球
+          rules: '中式九球规则'
+        }
+      },
+      settings: {
+        sound: true,
+        prediction: true,
+        vibration: true,
+        quality: 3, // 1-低, 2-中, 3-高
+        tableMaterial: 'standard' // 'standard', 'fast', 'slow'
+      }
+    };
+
+    // Matter.js 引擎相关变量
+    let engine, render, world;
+    let balls = [];
+    let cueBall = null;
+    let isDragging = false;
+    let dragStartPos = { x: 0, y: 0 };
+    let power = 0;
+    let maxPower = 100;
+    let isShooting = false;
+    let predictionLine = null;
+
+    // DOM 元素
+    const screens = {
+      loading: document.getElementById('loading-screen'),
+      mainMenu: document.getElementById('main-menu'),
+      gameModeSelect: document.getElementById('game-mode-select'),
+      difficultySelect: document.getElementById('difficulty-select'),
+      gameScreen: document.getElementById('game-screen'),
+      multiplayerScreen: document.getElementById('multiplayer-screen'),
+      settingsScreen: document.getElementById('settings-screen'),
+      aboutScreen: document.getElementById('about-screen')
+    };
+
+    // 初始化游戏
+    function init() {
+      // 模拟加载过程
+      simulateLoading();
+      
+      // 绑定事件监听器
+      bindEventListeners();
+    }
+
+    // 模拟加载过程
+    function simulateLoading() {
+      const loadingBar = document.getElementById('loading-bar');
+      let progress = 0;
+      
+      const loadingInterval = setInterval(() => {
+        progress += Math.random() * 10;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(loadingInterval);
+          
+          // 加载完成后显示主菜单
+          setTimeout(() => {
+            switchScreen('mainMenu');
+          }, 500);
+        }
+        
+        loadingBar.style.width = `${progress}%`;
+      }, 200);
+    }
+
+    // 切换屏幕
+    function switchScreen(screenId) {
+      // 隐藏所有屏幕
+      Object.values(screens).forEach(screen => {
+        screen.classList.add('hidden');
+      });
+      
+      // 显示指定屏幕
+      screens[screenId].classList.remove('hidden');
+      
+      // 更新当前屏幕状态
+      gameState.currentScreen = screenId;
+    }
+
+    // 绑定事件监听器
+    function bindEventListeners() {
+      // 主菜单按钮
+      document.getElementById('play-btn').addEventListener('click', () => {
+        switchScreen('gameModeSelect');
+      });
+      
+      document.getElementById('multiplayer-btn').addEventListener('click', () => {
+        switchScreen('multiplayerScreen');
+      });
+      
+      document.getElementById('settings-btn').addEventListener('click', () => {
+        switchScreen('settingsScreen');
+      });
+      
+      document.getElementById('about-btn').addEventListener('click', () => {
+        switchScreen('aboutScreen');
+      });
+      
+      // 返回按钮
+      document.getElementById('back-to-menu-btn').addEventListener('click', () => {
+        switchScreen('mainMenu');
+      });
+      
+      document.getElementById('back-to-mode-btn').addEventListener('click', () => {
+        switchScreen('gameModeSelect');
+      });
+      
+      document.getElementById('back-to-menu-from-multiplayer-btn').addEventListener('click', () => {
+        switchScreen('mainMenu');
+      });
+      
+      document.getElementById('back-to-menu-from-settings-btn').addEventListener('click', () => {
+        switchScreen('mainMenu');
+      });
+      
+      document.getElementById('back-to-menu-from-about-btn').addEventListener('click', () => {
+        switchScreen('mainMenu');
+      });
+      
+      // 游戏模式选择
+      document.querySelectorAll('.mode-card').forEach(card => {
+        card.addEventListener('click', () => {
+          gameState.selectedMode = card.dataset.mode;
+          switchScreen('difficultySelect');
+        });
+      });
+      
+      // 难度选择
+      document.querySelectorAll('.difficulty-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          gameState.selectedDifficulty = btn.dataset.difficulty;
+          
+          // 重置按钮样式
+          document.querySelectorAll('.difficulty-btn').forEach(b => {
+            b.classList.remove('ios-button');
+            b.classList.add('ios-button-secondary');
+          });
+          
+          // 设置选中按钮样式
+          btn.classList.remove('ios-button-secondary');
+          btn.classList.add('ios-button');
+          
+          // 开始游戏
+          startGame();
+        });
+      });
+      
+      // 游戏内按钮
+      document.getElementById('pause-btn').addEventListener('click', () => {
+        pauseGame();
+      });
+      
+      document.getElementById('settings-in-game-btn').addEventListener('click', () => {
+        pauseGame();
+        document.getElementById('pause-menu').classList.remove('active');
+        switchScreen('settingsScreen');
+      });
+      
+      // 暂停菜单按钮
+      document.getElementById('resume-btn').addEventListener('click', () => {
+        resumeGame();
+      });
+      
+      document.getElementById('restart-btn').addEventListener('click', () => {
+        document.getElementById('pause-menu').classList.remove('active');
+        restartGame();
+      });
+      
+      document.getElementById('settings-in-pause-btn').addEventListener('click', () => {
+        document.getElementById('pause-menu').classList.remove('active');
+        switchScreen('settingsScreen');
+      });
+      
+      document.getElementById('quit-btn').addEventListener('click', () => {
+        document.getElementById('pause-menu').classList.remove('active');
+        endGame();
+        switchScreen('mainMenu');
+      });
+      
+      // 游戏结束菜单按钮
+      document.getElementById('play-again-btn').addEventListener('click', () => {
+        document.getElementById('game-over-menu').classList.remove('active');
+        restartGame();
+      });
+      
+      document.getElementById('change-mode-btn').addEventListener('click', () => {
+        document.getElementById('game-over-menu').classList.remove('active');
+        switchScreen('gameModeSelect');
+      });
+      
+      document.getElementById('back-to-main-menu-btn').addEventListener('click', () => {
+        document.getElementById('game-over-menu').classList.remove('active');
+        switchScreen('mainMenu');
+      });
+      
+      // 设置页面控件
+      document.getElementById('sound-toggle').addEventListener('change', (e) => {
+        gameState.settings.sound = e.target.checked;
+      });
+      
+      document.getElementById('prediction-toggle').addEventListener('change', (e) => {
+        gameState.settings.prediction = e.target.checked;
+        updatePredictionLine();
+      });
+      
+      document.getElementById('vibration-toggle').addEventListener('change', (e) => {
+        gameState.settings.vibration = e.target.checked;
+      });
+      
+      document.getElementById('quality-slider').addEventListener('input', (e) => {
+        const value = parseInt(e.target.value);
+        gameState.settings.quality = value;
+        
+        // 更新显示值
+        const qualityText = ['低', '中', '高'];
+        document.getElementById('quality-value').textContent = qualityText[value - 1];
+        
+        // 如果游戏正在进行，应用新的质量设置
+        if (gameState.isGameActive) {
+          applyQualitySettings();
+        }
+      });
+      
+      document.querySelectorAll('.table-material-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          // 重置按钮样式
+          document.querySelectorAll('.table-material-btn').forEach(b => {
+            b.classList.remove('bg-pool-green', 'text-white');
+            b.classList.add('bg-gray-200', 'text-gray-700');
+          });
+          
+          // 设置选中按钮样式
+          btn.classList.remove('bg-gray-200', 'text-gray-700');
+          btn.classList.add('bg-pool-green', 'text-white');
+          
+          // 更新设置
+          gameState.settings.tableMaterial = btn.dataset.material;
+          
+          // 如果游戏正在进行，应用新的材质设置
+          if (gameState.isGameActive) {
+            applyTableMaterialSettings();
+          }
+        });
+      });
+      
+      document.getElementById('reset-settings-btn').addEventListener('click', () => {
+        // 重置设置
+        gameState.settings = {
+          sound: true,
+          prediction: true,
+          vibration: true,
+          quality: 3,
+          tableMaterial: 'standard'
+        };
+        
+        // 更新UI
+        document.getElementById('sound-toggle').checked = true;
+        document.getElementById('prediction-toggle').checked = true;
+        document.getElementById('vibration-toggle').checked = true;
+        document.getElementById('quality-slider').value = 3;
+        document.getElementById('quality-value').textContent = '高';
+        
+        // 重置材质按钮
+        document.querySelectorAll('.table-material-btn').forEach(btn => {
+          if (btn.dataset.material === 'standard') {
+            btn.classList.remove('bg-gray-200', 'text-gray-700');
+            btn.classList.add('bg-pool-green', 'text-white');
+          } else {
+            btn.classList.remove('bg-pool-green', 'text-white');
+            btn.classList.add('bg-gray-200', 'text-gray-700');
+          }
+        });
+        
+        // 如果游戏正在进行，应用新的设置
+        if (gameState.isGameActive) {
+          applyQualitySettings();
+          applyTableMaterialSettings();
+          updatePredictionLine();
+        }
+      });
+      
+      // 好友对战相关
+      document.querySelectorAll('.friend-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          // 重置按钮样式
+          document.querySelectorAll('.friend-mode-btn').forEach(b => {
+            b.classList.remove('bg-pool-green', 'text-white');
+            b.classList.add('bg-gray-200', 'text-gray-700');
+          });
+          
+          // 设置选中按钮样式
+          btn.classList.remove('bg-gray-200', 'text-gray-700');
+          btn.classList.add('bg-pool-green', 'text-white');
+          
+          // 更新选中的游戏模式
+          gameState.selectedMode = btn.dataset.mode;
+        });
+      });
+      
+      document.querySelectorAll('.invite-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (!btn.disabled) {
+            // 显示邀请成功提示
+            const toast = document.getElementById('invite-success-toast');
+            toast.style.opacity = '1';
+            
+            // 3秒后隐藏提示
+            setTimeout(() => {
+              toast.style.opacity = '0';
+            }, 3000);
+          }
+        });
+      });
+    }
+
+    // 开始游戏
+    function startGame() {
+      // 切换到游戏屏幕
+      switchScreen('gameScreen');
+      
+      // 重置游戏状态
+      gameState.isGameActive = true;
+      gameState.isPaused = false;
+      gameState.playerScore = 0;
+      gameState.computerScore = 0;
+      gameState.currentTurn = 'player';
+      
+      // 更新UI
+      document.getElementById('player-score').textContent = '0';
+      document.getElementById('computer-score').textContent = '0';
+      document.getElementById('current-turn').textContent = '你的回合';
+      
+      // 初始化物理引擎
+      initPhysicsEngine();
+      
+      // 创建台球
+      createBalls();
+      
+      // 绑定台球桌事件
+      bindTableEvents();
+    }
+
+    // 初始化物理引擎
+    function initPhysicsEngine() {
+      // 创建引擎
+      engine = Matter.Engine.create({
+        enableSleeping: true,
+        timing: {
+          timeScale: 1
+        }
+      });
+      
+      world = engine.world;
+      
+      // 设置重力为0（台球在水平面上）
+      world.gravity.y = 0;
+      
+      // 创建渲染器
+      const tableContainer = document.getElementById('pool-table');
+      const tableRect = tableContainer.getBoundingClientRect();
+      
+      render = Matter.Render.create({
+        element: tableContainer,
+        engine: engine,
+        options: {
+          width: tableRect.width,
+          height: tableRect.height,
+          wireframes: false,
+          background: 'transparent',
+          showSleeping: false,
+          showDebug: false,
+          showBroadphase: false,
+          showBounds: false,
+          showVelocity: false,
+          showCollisions: false,
+          showAxes: false,
+          showPositions: false,
+          showAngleIndicator: false,
+          showIds: false,
+          showShadows: false
+        }
+      });
+      
+      // 创建台球桌边界
+      createTableBoundaries();
+      
+      // 运行引擎和渲染器
+      Matter.Engine.run(engine);
+      Matter.Render.run(render);
+      
+      // 监听碰撞事件
+      Matter.Events.on(engine, 'collisionStart', handleCollision);
+      
+      // 监听更新事件
+      Matter.Events.on(engine, 'afterUpdate', handleAfterUpdate);
+    }
+
+    // 创建台球桌边界
+    function createTableBoundaries() {
+      const tableContainer = document.getElementById('pool-table');
+      const tableWidth = tableContainer.clientWidth;
+      const tableHeight = tableContainer.clientHeight;
+      const wallThickness = 20;
+      
+      // 创建边界墙壁
+      const walls = [
+        // 上边界
+        Matter.Bodies.rectangle(
+          tableWidth / 2,
+          -wallThickness / 2,
+          tableWidth,
+          wallThickness,
+          { isStatic: true, render: { fillStyle: '#8B4513' } }
+        ),
+        // 下边界
+        Matter.Bodies.rectangle(
+          tableWidth / 2,
+          tableHeight + wallThickness / 2,
+          tableWidth,
+          wallThickness,
+          { isStatic: true, render: { fillStyle: '#8B4513' } }
+        ),
+        // 左边界
+        Matter.Bodies.rectangle(
+          -wallThickness / 2,
+          tableHeight / 2,
+          wallThickness,
+          tableHeight,
+          { isStatic: true, render: { fillStyle: '#8B4513' } }
+        ),
+        // 右边界
+        Matter.Bodies.rectangle(
+          tableWidth + wallThickness / 2,
+          tableHeight / 2,
+          wallThickness,
+          tableHeight,
+          { isStatic: true, render: { fillStyle: '#8B4513' } }
+        )
+      ];
+      
+      // 添加边界到世界
+      Matter.World.add(world, walls);
+      
+      // 创建球袋（使用传感器，不产生碰撞响应）
+      const pocketRadius = 25;
+      const pockets = [
+        // 左上角袋
+        Matter.Bodies.circle(
+          0,
+          0,
+          pocketRadius,
+          { isStatic: true, isSensor: true, render: { visible: false } }
+        ),
+        // 右上角袋
+        Matter.Bodies.circle(
+          tableWidth,
+          0,
+          pocketRadius,
+          { isStatic: true, isSensor: true, render: { visible: false } }
+        ),
+        // 左下角袋
+        Matter.Bodies.circle(
+          0,
+          tableHeight,
+          pocketRadius,
+          { isStatic: true, isSensor: true, render: { visible: false } }
+        ),
+        // 右下角袋
+        Matter.Bodies.circle(
+          tableWidth,
+          tableHeight,
+          pocketRadius,
+          { isStatic: true, isSensor: true, render: { visible: false } }
+        ),
+        // 上中袋
+        Matter.Bodies.circle(
+          tableWidth / 2,
+          0,
+          pocketRadius,
+          { isStatic: true, isSensor: true, render: { visible: false } }
+        ),
+        // 下中袋
+        Matter.Bodies.circle(
+          tableWidth / 2,
+          tableHeight,
+          pocketRadius,
+          { isStatic: true, isSensor: true, render: { visible: false } }
+        )
+      ];
+      
+      // 添加球袋到世界
+      Matter.World.add(world, pockets);
+    }
+
+    // 创建台球
+    function createBalls() {
+      const tableContainer = document.getElementById('pool-table');
+      const tableWidth = tableContainer.clientWidth;
+      const tableHeight = tableContainer.clientHeight;
+      const ballRadius = Math.min(tableWidth, tableHeight) * 0.025;
+      
+      // 清空现有球
+      balls = [];
+      
+      // 根据游戏模式创建不同的球
+      switch (gameState.selectedMode) {
+        case 'eight-ball':
+          createEightBallBalls(tableWidth, tableHeight, ballRadius);
+          break;
+        case 'snooker':
+          createSnookerBalls(tableWidth, tableHeight, ballRadius);
+          break;
+        case 'nine-ball':
+          createNineBallBalls(tableWidth, tableHeight, ballRadius);
+          break;
+      }
+      
+      // 添加所有球到世界
+      Matter.World.add(world, balls);
+      
+      // 设置母球
+      cueBall = balls[0];
+    }
+
+    // 创建中式八球球组
+    function createEightBallBalls(tableWidth, tableHeight, ballRadius) {
+      // 创建母球（白色）
+      const cueBall = Matter.Bodies.circle(
+        tableWidth * 0.75,
+        tableHeight / 2,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: '#FFFFFF',
+            strokeStyle: '#000000',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      balls.push(cueBall);
+      
+      // 创建目标球
+      const ballColors = [
+        '#FF0000', // 1号球：红色
+        '#0000FF', // 2号球：蓝色
+        '#FF8000', // 3号球：橙色
+        '#8000FF', // 4号球：紫色
+        '#FFFF00', // 5号球：黄色
+        '#00FF00', // 6号球：绿色
+        '#FF00FF', // 7号球：粉色
+        '#000000', // 8号球：黑色
+        '#FF6666', // 9号球：浅红色
+        '#6666FF', // 10号球：浅蓝色
+        '#FFBB66', // 11号球：浅橙色
+        '#BB80FF', // 12号球：浅紫色
+        '#FFFF66', // 13号球：浅黄色
+        '#66FF66', // 14号球：浅绿色
+        '#FF66FF'  // 15号球：浅粉色
+      ];
+      
+      // 排列球的位置（三角形排列）
+      const triangleBase = 5;
+      const triangleHeight = 3;
+      const ballSpacing = ballRadius * 2.2;
+      const startX = tableWidth * 0.25;
+      const startY = tableHeight / 2 - (triangleHeight - 1) * ballSpacing / 2;
+      
+      let ballIndex = 0;
+      
+      for (let row = 0; row < triangleHeight; row++) {
+        const rowLength = triangleBase - row;
+        const rowStartX = startX - (rowLength - 1) * ballSpacing / 2;
+        
+        for (let col = 0; col < rowLength; col++) {
+          if (ballIndex >= ballColors.length) break;
+          
+          const ball = Matter.Bodies.circle(
+            rowStartX + col * ballSpacing,
+            startY + row * ballSpacing * 0.866, // 0.866是sin(60°)，用于三角形排列
+            ballRadius,
+            {
+              restitution: 0.8,
+              friction: 0.05,
+              frictionAir: 0.001,
+              render: {
+                fillStyle: ballColors[ballIndex],
+                strokeStyle: '#FFFFFF',
+                lineWidth: 1
+              }
+            }
+          );
+          
+          balls.push(ball);
+          ballIndex++;
+        }
+      }
+    }
+
+    // 创建斯诺克球组
+    function createSnookerBalls(tableWidth, tableHeight, ballRadius) {
+      // 创建母球（白色）
+      const cueBall = Matter.Bodies.circle(
+        tableWidth * 0.75,
+        tableHeight / 2,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: '#FFFFFF',
+            strokeStyle: '#000000',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      balls.push(cueBall);
+      
+      // 创建红球（15个）
+      const redBalls = [];
+      const triangleBase = 5;
+      const triangleHeight = 5;
+      const ballSpacing = ballRadius * 2.2;
+      const startX = tableWidth * 0.25;
+      const startY = tableHeight / 2 - (triangleHeight - 1) * ballSpacing / 2;
+      
+      for (let row = 0; row < triangleHeight; row++) {
+        const rowLength = Math.min(row + 1, triangleBase);
+        const rowStartX = startX - (rowLength - 1) * ballSpacing / 2;
+        
+        for (let col = 0; col < rowLength; col++) {
+          if (redBalls.length >= 15) break;
+          
+          const ball = Matter.Bodies.circle(
+            rowStartX + col * ballSpacing,
+            startY + row * ballSpacing * 0.866,
+            ballRadius,
+            {
+              restitution: 0.8,
+              friction: 0.05,
+              frictionAir: 0.001,
+              render: {
+                fillStyle: '#FF0000',
+                strokeStyle: '#FFFFFF',
+                lineWidth: 1
+              }
+            }
+          );
+          
+          redBalls.push(ball);
+        }
+      }
+      
+      balls.push(...redBalls);
+      
+      // 创建彩球
+      const coloredBalls = [
+        { color: '#YELLOW', x: tableWidth * 0.25, y: tableHeight / 2 - ballSpacing * 3 }, // 黄球
+        { color: '#GREEN', x: tableWidth * 0.25, y: tableHeight / 2 - ballSpacing * 1.5 }, // 绿球
+        { color: '#BROWN', x: tableWidth * 0.25, y: tableHeight / 2 }, // 棕球
+        { color: '#BLUE', x: tableWidth * 0.25, y: tableHeight / 2 + ballSpacing * 1.5 }, // 蓝球
+        { color: '#PINK', x: tableWidth * 0.25, y: tableHeight / 2 + ballSpacing * 3 }, // 粉球
+        { color: '#BLACK', x: tableWidth * 0.125, y: tableHeight / 2 } // 黑球
+      ];
+      
+      // 替换颜色代码
+      coloredBalls[0].color = '#FFFF00'; // 黄球
+      coloredBalls[1].color = '#00FF00'; // 绿球
+      coloredBalls[2].color = '#8B4513'; // 棕球
+      coloredBalls[3].color = '#0000FF'; // 蓝球
+      coloredBalls[4].color = '#FFC0CB'; // 粉球
+      coloredBalls[5].color = '#000000'; // 黑球
+      
+      // 添加彩球
+      coloredBalls.forEach(ballInfo => {
+        const ball = Matter.Bodies.circle(
+          ballInfo.x,
+          ballInfo.y,
+          ballRadius,
+          {
+            restitution: 0.8,
+            friction: 0.05,
+            frictionAir: 0.001,
+            render: {
+              fillStyle: ballInfo.color,
+              strokeStyle: '#FFFFFF',
+              lineWidth: 1
+            }
+          }
+        );
+        
+        balls.push(ball);
+      });
+    }
+
+    // 创建中式九球球组
+    function createNineBallBalls(tableWidth, tableHeight, ballRadius) {
+      // 创建母球（白色）
+      const cueBall = Matter.Bodies.circle(
+        tableWidth * 0.75,
+        tableHeight / 2,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: '#FFFFFF',
+            strokeStyle: '#000000',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      balls.push(cueBall);
+      
+      // 创建目标球
+      const ballColors = [
+        '#YELLOW',   // 1号球：黄色
+        '#BLUE',     // 2号球：蓝色
+        '#RED',      // 3号球：红色
+        '#PURPLE',   // 4号球：紫色
+        '#ORANGE',   // 5号球：橙色
+        '#GREEN',    // 6号球：绿色
+        '#BROWN',    // 7号球：棕色
+        '#BLACK',    // 8号球：黑色
+        '#PINK'      // 9号球：粉色
+      ];
+      
+      // 替换颜色代码
+      ballColors[0] = '#FFFF00'; // 黄色
+      ballColors[1] = '#0000FF'; // 蓝色
+      ballColors[2] = '#FF0000'; // 红色
+      ballColors[3] = '#8000FF'; // 紫色
+      ballColors[4] = '#FF8000'; // 橙色
+      ballColors[5] = '#00FF00'; // 绿色
+      ballColors[6] = '#8B4513'; // 棕色
+      ballColors[7] = '#000000'; // 黑色
+      ballColors[8] = '#FFC0CB'; // 粉色
+      
+      // 排列球的位置（菱形排列）
+      const startX = tableWidth * 0.25;
+      const startY = tableHeight / 2;
+      const ballSpacing = ballRadius * 2.2;
+      
+      // 1号球在最前面
+      const ball1 = Matter.Bodies.circle(
+        startX,
+        startY,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[0],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      balls.push(ball1);
+      
+      // 2-3号球在第二排
+      const ball2 = Matter.Bodies.circle(
+        startX - ballSpacing / 2,
+        startY - ballSpacing * 0.866 / 2,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[1],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      const ball3 = Matter.Bodies.circle(
+        startX + ballSpacing / 2,
+        startY - ballSpacing * 0.866 / 2,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[2],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      balls.push(ball2, ball3);
+      
+      // 4-6号球在第三排
+      const ball4 = Matter.Bodies.circle(
+        startX - ballSpacing,
+        startY - ballSpacing * 0.866,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[3],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      const ball5 = Matter.Bodies.circle(
+        startX,
+        startY - ballSpacing * 0.866,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[4],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      const ball6 = Matter.Bodies.circle(
+        startX + ballSpacing,
+        startY - ballSpacing * 0.866,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[5],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      balls.push(ball4, ball5, ball6);
+      
+      // 7-9号球在最后一排
+      const ball7 = Matter.Bodies.circle(
+        startX - ballSpacing / 2,
+        startY - ballSpacing * 0.866 * 1.5,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[6],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      const ball8 = Matter.Bodies.circle(
+        startX + ballSpacing / 2,
+        startY - ballSpacing * 0.866 * 1.5,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[7],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      const ball9 = Matter.Bodies.circle(
+        startX,
+        startY - ballSpacing * 0.866 * 2,
+        ballRadius,
+        {
+          restitution: 0.8,
+          friction: 0.05,
+          frictionAir: 0.001,
+          render: {
+            fillStyle: ballColors[8],
+            strokeStyle: '#FFFFFF',
+            lineWidth: 1
+          }
+        }
+      );
+      
+      balls.push(ball7, ball8, ball9);
+    }
+
+    // 绑定台球桌事件
+    function bindTableEvents() {
+      const tableContainer = document.getElementById('pool-table');
+      
+      // 鼠标/触摸事件
+      tableContainer.addEventListener('mousedown', handleMouseDown);
+      tableContainer.addEventListener('mousemove', handleMouseMove);
+      tableContainer.addEventListener('mouseup', handleMouseUp);
+      tableContainer.addEventListener('mouseleave', handleMouseUp);
+      
+      // 触摸事件
+      tableContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+      tableContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+      tableContainer.addEventListener('touchend', handleTouchEnd);
+      tableContainer.addEventListener('touchcancel', handleTouchEnd);
+    }
+
+    // 处理鼠标按下事件
+    function handleMouseDown(event) {
+      if (!gameState.isGameActive || gameState.isPaused || gameState.currentTurn !== 'player' || isShooting) {
+        return;
+      }
+      
+      const tableContainer = document.getElementById('pool-table');
+      const rect = tableContainer.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      
+      // 检查是否点击在母球上
+      if (isPointInBall(x, y, cueBall)) {
+        isDragging = true;
+        dragStartPos = { x, y };
+        
+        // 显示球杆
+        const poolCue = document.getElementById('pool-cue');
+        poolCue.style.display = 'block';
+        
+        // 更新球杆位置
+        updateCuePosition(x, y);
+      }
+    }
+
+    // 处理鼠标移动事件
+    function handleMouseMove(event) {
+      if (!isDragging || !gameState.isGameActive || gameState.isPaused || gameState.currentTurn !== 'player' || isShooting) {
+        return;
+      }
+      
+      const tableContainer = document.getElementById('pool-table');
+      const rect = tableContainer.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      
+      // 更新球杆位置
+      updateCuePosition(x, y);
+      
+      // 计算力度
+      calculatePower(x, y);
+      
+      // 更新球路预测
+      updatePredictionLine();
+    }
+
+    // 处理鼠标松开事件
+    function handleMouseUp(event) {
+      if (!isDragging || !gameState.isGameActive || gameState.isPaused || gameState.currentTurn !== 'player' || isShooting) {
+        return;
+      }
+      
+      const tableContainer = document.getElementById('pool-table');
+      const rect = tableContainer.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      
+      // 击球
+      shoot(x, y);
+      
+      // 隐藏球杆
+      const poolCue = document.getElementById('pool-cue');
+      poolCue.style.display = 'none';
+      
+      // 隐藏球路预测线
+      hidePredictionLine();
+      
+      isDragging = false;
+    }
+
+    // 处理触摸开始事件
+    function handleTouchStart(event) {
+      event.preventDefault();
+      
+      if (!gameState.isGameActive || gameState.isPaused || gameState.currentTurn !== 'player' || isShooting) {
+        return;
+      }
+      
+      const touch = event.touches[0];
+      const tableContainer = document.getElementById('pool-table');
+      const rect = tableContainer.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      
+      // 检查是否触摸在母球上
+      if (isPointInBall(x, y, cueBall)) {
+        isDragging = true;
+        dragStartPos = { x, y };
+        
+        // 显示球杆
+        const poolCue = document.getElementById('pool-cue');
+        poolCue.style.display = 'block';
+        
+        // 更新球杆位置
+        updateCuePosition(x, y);
+      }
+    }
+
+    // 处理触摸移动事件
+    function handleTouchMove(event) {
+      event.preventDefault();
+      
+      if (!isDragging || !gameState.isGameActive || gameState.isPaused || gameState.currentTurn !== 'player' || isShooting) {
+        return;
+      }
+      
+      const touch = event.touches[0];
+      const tableContainer = document.getElementById('pool-table');
+      const rect = tableContainer.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      
+      // 更新球杆位置
+      updateCuePosition(x, y);
+      
+      // 计算力度
+      calculatePower(x, y);
+      
+      // 更新球路预测
+      updatePredictionLine();
+    }
+
+    // 处理触摸结束事件
+    function handleTouchEnd(event) {
+      if (!isDragging || !gameState.isGameActive || gameState.isPaused || gameState.currentTurn !== 'player' || isShooting) {
+        return;
+      }
+      
+      const changedTouch = event.changedTouches[0];
+      const tableContainer = document.getElementById('pool-table');
+      const rect = tableContainer.getBoundingClientRect();
+      const x = changedTouch.clientX - rect.left;
+      const y = changedTouch.clientY - rect.top;
+      
+      // 击球
+      shoot(x, y);
+      
+      // 隐藏球杆
+      const poolCue = document.getElementById('pool-cue');
+      poolCue.style.display = 'none';
+      
+      // 隐藏球路预测线
+      hidePredictionLine();
+      
+      isDragging = false;
+    }
+
+    // 检查点是否在球内
+    function isPointInBall(x, y, ball) {
+      const ballX = ball.position.x;
+      const ballY = ball.position.y;
+      const radius = ball.circleRadius;
+      
+      const dx = x - ballX;
+      const dy = y - ballY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      return distance <= radius;
+    }
+
+    // 更新球杆位置
+    function updateCuePosition(x, y) {
+      const cueBallX = cueBall.position.x;
+      const cueBallY = cueBall.position.y;
+      
+      // 计算球杆方向
+      const angle = Math.atan2(y - cueBallY, x - cueBallX);
+      
+      // 计算球杆长度
+      const dx = x - cueBallX;
+      const dy = y - cueBallY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const cueLength = Math.min(distance, 150);
+      
+      // 更新球杆位置和旋转
+      const poolCue = document.getElementById('pool-cue');
+      poolCue.style.width = `${cueLength}px`;
+      poolCue.style.left = `${cueBallX}px`;
+      poolCue.style.top = `${cueBallY}px`;
+      poolCue.style.transform = `rotate(${angle}rad)`;
+    }
+
+    // 计算击球力度
+    function calculatePower(x, y) {
+      const dx = x - dragStartPos.x;
+      const dy = y - dragStartPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // 映射距离到力度（0-100）
+      power = Math.min(Math.max(distance / 2, 0), maxPower);
+      
+      // 更新力度条
+      const powerBar = document.getElementById('power-bar');
+      powerBar.style.width = `${power}%`;
+    }
+
+    // 更新球路预测线
+    function updatePredictionLine() {
+      if (!gameState.settings.prediction || !isDragging || !gameState.isGameActive || gameState.isPaused || gameState.currentTurn !== 'player' || isShooting) {
+        hidePredictionLine();
+        return;
+      }
+      
+      const cueBallX = cueBall.position.x;
+      const cueBallY = cueBall.position.y;
+      
+      // 获取球杆方向
+      const poolCue = document.getElementById('pool-cue');
+      const transform = poolCue.style.transform;
+      const angle = parseFloat(transform.match(/rotate\(([^)]+)\)/)[1]);
+      
+      // 计算预测线终点
+      const lineLength = 200 * (power / 100);
+      const endX = cueBallX + Math.cos(angle) * lineLength;
+      const endY = cueBallY + Math.sin(angle) * lineLength;
+      
+      // 显示预测线
+      const predictionLine = document.getElementById('prediction-line');
+      predictionLine.style.display = 'block';
+      predictionLine.style.width = `${lineLength}px`;
+      predictionLine.style.left = `${cueBallX}px`;
+      predictionLine.style.top = `${cueBallY}px`;
+      predictionLine.style.transform = `rotate(${angle}rad)`;
+    }
+
+    // 隐藏球路预测线
+    function hidePredictionLine() {
+      const predictionLine = document.getElementById('prediction-line');
+      predictionLine.style.display = 'none';
+    }
+
+    // 击球
+    function shoot(x, y) {
+      if (!gameState.isGameActive || gameState.isPaused || gameState.currentTurn !== 'player' || isShooting) {
+        return;
+      }
+      
+      isShooting = true;
+      
+      // 振动反馈
+      if (gameState.settings.vibration && navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      
+      // 播放音效
+      if (gameState.settings.sound) {
+        playSound('hit');
+      }
+      
+      // 计算击球方向
+      const cueBallX = cueBall.position.x;
+      const cueBallY = cueBall.position.y;
+      const angle = Math.atan2(y - cueBallY, x - cueBallX);
+      
+      // 计算击球力度
+      const dx = x - dragStartPos.x;
+      const dy = y - dragStartPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const force = Math.min(distance / 5, 20);
+      
+      // 应用力到母球
+      Matter.Body.applyForce(cueBall, { x: cueBallX, y: cueBallY }, {
+        x: Math.cos(angle) * force * -1,
+        y: Math.sin(angle) * force * -1
+      });
+      
+      // 重置力度条
+      const powerBar = document.getElementById('power-bar');
+      powerBar.style.width = '0%';
+      
+      // 等待球停止移动后切换回合
+      setTimeout(() => {
+        checkBallsStopped();
+      }, 1000);
+    }
+
+    // 检查球是否停止移动
+    function checkBallsStopped() {
+      let allStopped = true;
+      
+      balls.forEach(ball => {
+        const velocity = Math.sqrt(ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y);
+        if (velocity > 0.01) {
+          allStopped = false;
+        }
+      });
+      
+      if (allStopped) {
+        // 所有球都停止了，切换回合
+        switchTurn();
+      } else {
+        // 还有球在移动，继续检查
+        setTimeout(() => {
+          checkBallsStopped();
+        }, 500);
+      }
+    }
+
+    // 切换回合
+    function switchTurn() {
+      isShooting = false;
+      
+      if (gameState.currentTurn === 'player') {
+        gameState.currentTurn = 'computer';
+        document.getElementById('current-turn').textContent = '电脑回合';
+        
+        // 电脑思考一段时间后击球
+        setTimeout(() => {
+          computerTurn();
+        }, 1000);
+      } else {
+        gameState.currentTurn = 'player';
+        document.getElementById('current-turn').textContent = '你的回合';
+      }
+    }
+
+    // 电脑回合
+    function computerTurn() {
+      if (!gameState.isGameActive || gameState.isPaused) {
+        return;
+      }
+      
+      // 根据难度决定电脑的击球策略
+      let targetBall = null;
+      let force = 0;
+      let angle = 0;
+      
+      switch (gameState.selectedDifficulty) {
+        case 'easy':
+          // 简单难度：随机选择一个目标球，力度较小，精度较低
+          targetBall = balls[Math.floor(Math.random() * (balls.length - 1)) + 1];
+          force = 5 + Math.random() * 5;
+          break;
+        case 'medium':
+          // 中等难度：选择离母球最近的目标球，力度适中，精度中等
+          let minDistance = Infinity;
+          for (let i = 1; i < balls.length; i++) {
+            const distance = Matter.Vector.magnitude(Matter.Vector.sub(balls[i].position, cueBall.position));
+            if (distance < minDistance) {
+              minDistance = distance;
+              targetBall = balls[i];
+            }
+          }
+          force = 8 + Math.random() * 7;
+          break;
+        case 'hard':
+          // 困难难度：选择最有可能进球的目标球，力度较大，精度较高
+          // 这里简化处理，选择离袋口最近的球
+          const pockets = [
+            { x: 0, y: 0 },
+            { x: render.options.width, y: 0 },
+            { x: 0, y: render.options.height },
+            { x: render.options.width, y: render.options.height },
+            { x: render.options.width / 2, y: 0 },
+            { x: render.options.width / 2, y: render.options.height }
+          ];
+          
+          let bestTarget = null;
+          let bestPocket = null;
+          let bestScore = Infinity;
+          
+          for (let i = 1; i < balls.length; i++) {
+            const ball = balls[i];
+            
+            for (const pocket of pockets) {
+              // 计算球到袋口的距离
+              const ballToPocket = Matter.Vector.magnitude(Matter.Vector.sub(ball.position, pocket));
+              
+              // 计算母球到球的距离
+              const cueToBall = Matter.Vector.magnitude(Matter.Vector.sub(cueBall.position, ball.position));
+              
+              // 计算角度偏差
+              const ballToPocketAngle = Math.atan2(pocket.y - ball.position.y, pocket.x - ball.position.x);
+              const cueToBallAngle = Math.atan2(ball.position.y - cueBall.position.y, ball.position.x - cueBall.position.x);
+              const angleDiff = Math.abs(ballToPocketAngle - cueToBallAngle);
+              
+              // 综合评分（距离越近，角度偏差越小，评分越高）
+              const score = ballToPocket * 0.5 + cueToBall * 0.3 + angleDiff * 100 * 0.2;
+              
+              if (score < bestScore) {
+                bestScore = score;
+                bestTarget = ball;
+                bestPocket = pocket;
+              }
+            }
+          }
+          
+          targetBall = bestTarget || balls[1];
+          force = 10 + Math.random() * 10;
+          break;
+      }
+      
+      // 计算击球角度
+      angle = Math.atan2(targetBall.position.y - cueBall.position.y, targetBall.position.x - cueBall.position.x);
+      
+      // 根据难度添加随机偏差
+      let angleDeviation = 0;
+      switch (gameState.selectedDifficulty) {
+        case 'easy':
+          angleDeviation = (Math.random() - 0.5) * 0.4; // 较大偏差
+          break;
+        case 'medium':
+          angleDeviation = (Math.random() - 0.5) * 0.2; // 中等偏差
+          break;
+        case 'hard':
+          angleDeviation = (Math.random() - 0.5) * 0.1; // 较小偏差
+          break;
+      }
+      
+      angle += angleDeviation;
+      
+      // 应用力到母球
+      Matter.Body.applyForce(cueBall, { x: cueBall.position.x, y: cueBall.position.y }, {
+        x: Math.cos(angle) * force,
+        y: Math.sin(angle) * force
+      });
+      
+      // 播放音效
+      if (gameState.settings.sound) {
+        playSound('hit');
+      }
+      
+      // 等待球停止移动后切换回合
+      setTimeout(() => {
+        checkBallsStopped();
+      }, 1000);
+    }
+
+    // 处理碰撞事件
+    function handleCollision(event) {
+      const pairs = event.pairs;
+      
+      for (let i = 0; i < pairs.length; i++) {
+        const pair = pairs[i];
+        const bodyA = pair.bodyA;
+        const bodyB = pair.bodyB;
+        
+        // 检查是否有球进袋
+        if (isPocket(bodyA) && isBall(bodyB)) {
+          handleBallInPocket(bodyB);
+        } else if (isPocket(bodyB) && isBall(bodyA)) {
+          handleBallInPocket(bodyA);
+        }
+        
+        // 播放碰撞音效
+        if (isBall(bodyA) && isBall(bodyB) && gameState.settings.sound) {
+          playSound('collision');
+        }
+      }
+    }
+
+    // 处理更新事件
+    function handleAfterUpdate() {
+      // 检查游戏是否结束
+      checkGameOver();
+    }
+
+    // 检查是否是球袋
+    function isPocket(body) {
+      return body.isSensor && body.circleRadius && body.circleRadius > 20;
+    }
+
+    // 检查是否是球
+    function isBall(body) {
+      return body.circleRadius && body.circleRadius <= 20;
+    }
+
+    // 处理球进袋
+    function handleBallInPocket(ball) {
+      // 如果是母球进袋，需要将其重置到初始位置
+      if (ball === cueBall) {
+        resetCueBall();
+        return;
+      }
+      
+      // 播放进球音效
+      if (gameState.settings.sound) {
+        playSound('pocket');
+      }
+      
+      // 根据游戏模式处理得分
+      switch (gameState.selectedMode) {
+        case 'eight-ball':
+          handleEightBallPocket(ball);
+          break;
+        case 'snooker':
+          handleSnookerPocket(ball);
+          break;
+        case 'nine-ball':
+          handleNineBallPocket(ball);
+          break;
+      }
+      
+      // 移除球
+      Matter.World.remove(world, ball);
+      
+      // 从balls数组中移除
+      const index = balls.indexOf(ball);
+      if (index !== -1) {
+        balls.splice(index, 1);
+      }
+    }
+
+    // 重置母球位置
+    function resetCueBall() {
+      const tableWidth = render.options.width;
+      const tableHeight = render.options.height;
+      
+      Matter.Body.setPosition(cueBall, {
+        x: tableWidth * 0.75,
+        y: tableHeight / 2
+      });
+      
+      Matter.Body.setVelocity(cueBall, { x: 0, y: 0 });
+      Matter.Body.setAngularVelocity(cueBall, 0);
+      
+      // 母球进袋，对方获得自由球
+      switchTurn();
+    }
+
+    // 处理中式八球进球
+    function handleEightBallPocket(ball) {
+      // 简化处理：每进一球得1分
+      if (gameState.currentTurn === 'player') {
+        gameState.playerScore++;
+        document.getElementById('player-score').textContent = gameState.playerScore;
+      } else {
+        gameState.computerScore++;
+        document.getElementById('computer-score').textContent = gameState.computerScore;
+      }
+    }
+
+    // 处理斯诺克进球
+    function handleSnookerPocket(ball) {
+      // 根据球的颜色计算得分
+      let points = 0;
+      
+      switch (ball.render.fillStyle) {
+        case '#FF0000': // 红球
+          points = 1;
+          break;
+        case '#FFFF00': // 黄球
+          points = 2;
+          break;
+        case '#00FF00': // 绿球
+          points = 3;
+          break;
+        case '#8B4513': // 棕球
+          points = 4;
+          break;
+        case '#0000FF': // 蓝球
+          points = 5;
+          break;
+        case '#FFC0CB': // 粉球
+          points = 6;
+          break;
+        case '#000000': // 黑球
+          points = 7;
+          break;
+      }
+      
+      // 更新得分
+      if (gameState.currentTurn === 'player') {
+        gameState.playerScore += points;
+        document.getElementById('player-score').textContent = gameState.playerScore;
+      } else {
+        gameState.computerScore += points;
+        document.getElementById('computer-score').textContent = gameState.computerScore;
+      }
+    }
+
+    // 处理中式九球进球
+    function handleNineBallPocket(ball) {
+      // 简化处理：每进一球得1分
+      if (gameState.currentTurn === 'player') {
+        gameState.playerScore++;
+        document.getElementById('player-score').textContent = gameState.playerScore;
+      } else {
+        gameState.computerScore++;
+        document.getElementById('computer-score').textContent = gameState.computerScore;
+      }
+    }
+
+    // 检查游戏是否结束
+    function checkGameOver() {
+      // 根据游戏模式检查游戏是否结束
+      switch (gameState.selectedMode) {
+        case 'eight-ball':
+          // 简化处理：当只剩下母球时游戏结束
+          if (balls.length <= 1) {
+            endGame();
+          }
+          break;
+        case 'snooker':
+          // 简化处理：当只剩下母球和黑球时游戏结束
+          if (balls.length <= 2) {
+            endGame();
+          }
+          break;
+        case 'nine-ball':
+          // 简化处理：当9号球进袋时游戏结束
+          let nineBallExists = false;
+          for (let i = 1; i < balls.length; i++) {
+            if (balls[i].render.fillStyle === '#FFC0CB') { // 粉色球作为9号球
+              nineBallExists = true;
+              break;
+            }
+          }
+          
+          if (!nineBallExists) {
+            endGame();
+          }
+          break;
+      }
+    }
+
+    // 暂停游戏
+    function pauseGame() {
+      if (!gameState.isGameActive) {
+        return;
+      }
+      
+      gameState.isPaused = true;
+      
+      // 暂停物理引擎
+      Matter.Engine.clear(engine);
+      
+      // 显示暂停菜单
+      document.getElementById('pause-menu').classList.add('active');
+    }
+
+    // 继续游戏
+    function resumeGame() {
+      if (!gameState.isGameActive) {
+        return;
+      }
+      
+      gameState.isPaused = false;
+      
+      // 隐藏暂停菜单
+      document.getElementById('pause-menu').classList.remove('active');
+      
+      // 重新启动物理引擎
+      Matter.Engine.run(engine);
+    }
+
+    // 重新开始游戏
+    function restartGame() {
+      // 清理物理引擎
+      cleanupPhysicsEngine();
+      
+      // 重新开始游戏
+      startGame();
+    }
+
+    // 结束游戏
+    function endGame() {
+      gameState.isGameActive = false;
+      
+      // 清理物理引擎
+      cleanupPhysicsEngine();
+      
+      // 显示游戏结束菜单
+      const gameOverMenu = document.getElementById('game-over-menu');
+      const gameOverTitle = document.getElementById('game-over-title');
+      const gameOverMessage = document.getElementById('game-over-message');
+      const finalPlayerScore = document.getElementById('final-player-score');
+      const finalComputerScore = document.getElementById('final-computer-score');
+      
+      finalPlayerScore.textContent = gameState.playerScore;
+      finalComputerScore.textContent = gameState.computerScore;
+      
+      if (gameState.playerScore > gameState.computerScore) {
+        gameOverTitle.textContent = '恭喜！';
+        gameOverMessage.textContent = '你赢了！';
+      } else if (gameState.playerScore < gameState.computerScore) {
+        gameOverTitle.textContent = '游戏结束';
+        gameOverMessage.textContent = '你输了！';
+      } else {
+        gameOverTitle.textContent = '游戏结束';
+        gameOverMessage.textContent = '平局！';
+      }
+      
+      gameOverMenu.classList.add('active');
+    }
+
+    // 清理物理引擎
+    function cleanupPhysicsEngine() {
+      if (engine) {
+        Matter.Engine.clear(engine);
+        Matter.Render.stop(render);
+        Matter.World.clear(world);
+        Matter.Engine.clear(engine);
+        
+        render.canvas.remove();
+        render.canvas = null;
+        render.context = null;
+        render.textures = {};
+        
+        engine = null;
+        render = null;
+        world = null;
+        balls = [];
+        cueBall = null;
+      }
+    }
+
+    // 应用质量设置
+    function applyQualitySettings() {
+      if (!engine) return;
+      
+      // 根据质量设置调整物理引擎参数
+      switch (gameState.settings.quality) {
+        case 1: // 低质量
+          engine.timing.timeScale = 0.8;
+          Matter.Runner.setTimerScale(engine, 0.8);
+          break;
+        case 2: // 中等质量
+          engine.timing.timeScale = 1.0;
+          Matter.Runner.setTimerScale(engine, 1.0);
+          break;
+        case 3: // 高质量
+          engine.timing.timeScale = 1.0;
+          Matter.Runner.setTimerScale(engine, 1.2);
+          break;
+      }
+    }
+
+    // 应用球桌材质设置
+    function applyTableMaterialSettings() {
+      if (!balls.length) return;
+      
+      // 根据材质设置调整球的物理参数
+      switch (gameState.settings.tableMaterial) {
+        case 'standard': // 标准材质
+          balls.forEach(ball => {
+            ball.friction = 0.05;
+            ball.frictionAir = 0.001;
+            ball.restitution = 0.8;
+          });
+          break;
+        case 'fast': // 快速材质
+          balls.forEach(ball => {
+            ball.friction = 0.03;
+            ball.frictionAir = 0.0005;
+            ball.restitution = 0.9;
+          });
+          break;
+        case 'slow': // 慢速材质
+          balls.forEach(ball => {
+            ball.friction = 0.08;
+            ball.frictionAir = 0.002;
+            ball.restitution = 0.7;
+          });
+          break;
+      }
+    }
+
+    // 播放音效
+    function playSound(type) {
+      // 这里简化处理，实际应用中应该使用Audio对象播放真实音效
+      console.log(`播放音效: ${type}`);
+    }
+
+    // 初始化游戏
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
