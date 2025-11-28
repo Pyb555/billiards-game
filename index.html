@@ -3,15 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
+  <!-- iOS Web App优化 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="台球练习">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://picsum.photos/180/180">
+  
   <title>台球练习 - iOS风格台球游戏</title>
+  
   <!-- Tailwind CSS v3 -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Awesome -->
-  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-  <!-- Matter.js 物理引擎 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
   
-  <!-- Tailwind 配置 -->
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+  
+  <!-- Matter.js 物理引擎 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+  
+  <!-- 备用CDN（自动回退） -->
+  <script>
+    window.onload = function() {
+      if (typeof Matter === 'undefined') {
+        console.log('主CDN加载失败，尝试备用链接...');
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js';
+        script.onload = function() {
+          console.log('备用CDN加载成功！');
+        };
+        script.onerror = function() {
+          alert('物理引擎加载失败，请检查网络连接！');
+        };
+        document.head.appendChild(script);
+      }
+    };
+  </script>
+  
+  <!-- Tailwind配置 -->
   <script>
     tailwind.config = {
       theme: {
@@ -50,6 +79,9 @@
       }
     }
   </script>
+  
+  <!-- 其他样式配置... -->
+</head>
   
   <style type="text/tailwindcss">
     @layer utilities {
